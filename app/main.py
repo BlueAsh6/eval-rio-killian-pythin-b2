@@ -1,8 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, Field
-from typing import Literal
+from typing import Optional
 from sqlalchemy.orm import Session
-from fastapi import Depends
+from sqlalchemy.exc import IntegrityError
 from app.db import get_db, init_db
 from app.models import Station
 
@@ -26,11 +26,11 @@ class StationOut(BaseModel):
     status: str
 
 class StationPatch(BaseModel):
-    status: str = None
-    name: str = None
+    status: Optional[str] = None
+    name: Optional[str] = None
 
 @app.get("/health")
-def health_stats():
+def health():
     return {"status": "ok"}
 
 @app.get("/stations")
@@ -39,7 +39,6 @@ def get_stations(status: str = None, db: Session = Depends(get_db)):
         return db.query(Station).all()
     return db.query(Station).filter(Station.status == status).all()
 
-
 @app.get("/stations/{station_id}", response_model=StationOut)
 def get_station(station_id: int, db: Session = Depends(get_db)):
     station = db.get(Station, station_id)
@@ -47,26 +46,36 @@ def get_station(station_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404)
     return station
 
-
 @app.post("/stations", response_model=StationOut, status_code=201)
-def CreateStation(data: StationCreate):
-    global next_id
+def create_station(data: StationCreate, db: Session = Depends(get_db)):
     if data.status not in ["open", "closed", "maintenance"]:
         raise HTTPException(status_code=422)
-
-    NewStation = {
-        "id": next_id,
-        "code": data.code,
-        "capacity": data.capacity,
-        "name": data.name,
-        "status": data.status,
-        }
-
-    stations.append(NewStation)
-    next_id += 1
-
-    return NewStation
+    new_station = Station(
+        code=data.code,
+        name=data.name,
+        capacity=data.capacity,
+        status=data.status,
+    )
+    try:
+        db.add(new_station)
+        db.commit()
+        db.refresh(new_station)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Code déjà utilisé")
+    return new_station
 
 @app.patch("/stations/{station_id}", response_model=StationOut)
-def patch_station(station_id: int, data: StationPatch):
-    "je sais pas la suite m3 shcool me livre pas son secret"
+def patch_station(station_id: int, data: StationPatch, db: Session = Depends(get_db)):
+    station = db.get(Station, station_id)
+    if station is None:
+        raise HTTPException(status_code=404)
+    if data.name is not None:
+        station.name = data.name
+    if data.status is not None:
+        if data.status not in ["open", "closed", "maintenance"]:
+            raise HTTPException(status_code=422)
+        station.status = data.status
+    db.commit()
+    db.refresh(station)
+    return station
