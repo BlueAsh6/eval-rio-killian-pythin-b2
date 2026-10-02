@@ -1,6 +1,6 @@
 1. Une route GET /stations crée une station. Quel verbe et quel code HTTP faut-il utiliser pour cette création ?
 
-Il faut utiliser un code http:POST et le code de renvoie sera 201, pour confirmer que la création a bien eu lieu et que le post répond correcement 
+Il faut utiliser un code http:POST et le code de renvoie sera 201, pour confirmer que la création a bien eu lieu et que le post répond correctement 
 
 2. GET /stations/999 demande une station inexistante. Quel code HTTP et quel type de réponse faut-il
 renvoyer ?
